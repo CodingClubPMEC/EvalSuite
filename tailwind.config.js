@@ -5,7 +5,17 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      boxShadow: {
+        '3xl': '0 35px 60px -12px rgba(0, 0, 0, 0.25)',
+      },
+      backdropBlur: {
+        'xs': '2px',
+      },
+      animation: {
+        'bounce-slow': 'bounce 2s infinite',
+      }
+    },
   },
   plugins: [],
 }
