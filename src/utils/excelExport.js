@@ -1,42 +1,57 @@
-import * as XLSX from 'xlsx';
+// Lazy import ExcelJS and file-saver to reduce initial bundle size
+const importExcelJS = () => import('exceljs');
+const importFileSaver = () => import('file-saver');
+
 import { teams, evaluationCriteria, juryProfiles } from '../data/juryData';
 
-export const exportToExcel = (data, identifier) => {
+export const exportToExcel = async (data, identifier) => {
+  // Dynamically import ExcelJS and FileSaver only when needed
+  const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
+    importExcelJS(),
+    importFileSaver()
+  ]);
+
   let workbook, filename;
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
 
   if (data.consolidated) {
     // Handle consolidated marksheet export
-    workbook = createConsolidatedWorkbook(data);
+    workbook = await createConsolidatedWorkbook(data, ExcelJS);
     filename = `SIH_Consolidated_Marksheet_${timestamp}.xlsx`;
   } else {
     // Handle individual jury export (legacy support)
-    workbook = createIndividualWorkbook(data, identifier);
+    workbook = await createIndividualWorkbook(data, identifier, ExcelJS);
     const jury = juryProfiles.find(j => j.id === parseInt(identifier));
     const juryName = jury ? jury.name : `Jury_${identifier}`;
     filename = `SIH_Marksheet_${juryName.replace(/\s+/g, '_')}_${timestamp}.xlsx`;
   }
 
   // Save the file
-  XLSX.writeFile(workbook, filename);
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  saveAs(blob, filename);
 };
 
 // Create consolidated marksheet workbook
-const createConsolidatedWorkbook = (data) => {
-  const workbook = XLSX.utils.book_new();
+const createConsolidatedWorkbook = async (data, ExcelJS) => {
+  const workbook = new ExcelJS.Workbook();
 
   // Summary Sheet
-  const summaryData = [
-    ['INTERNAL HACKATHON - CONSOLIDATED MARKSHEET'],
-    ['Parala Maharaja Engineering College'],
-    ['Generated:', new Date(data.generatedAt).toLocaleString()],
-    [''],
-    ['TEAM RANKINGS (by Average Score)'],
-    ['Rank', 'Team Name', 'Project Title', 'Average Score', 'Total Evaluators'],
-  ];
-
+  const summarySheet = workbook.addWorksheet('Summary');
+  
+  // Add header rows
+  summarySheet.addRow(['INTERNAL HACKATHON - CONSOLIDATED MARKSHEET']);
+  summarySheet.addRow(['Parala Maharaja Engineering College']);
+  summarySheet.addRow(['Generated:', new Date(data.generatedAt).toLocaleString()]);
+  summarySheet.addRow([]);
+  summarySheet.addRow(['TEAM RANKINGS (by Average Score)']);
+  summarySheet.addRow(['Rank', 'Team Name', 'Project Title', 'Average Score', 'Total Evaluators']);
+  
+  // Add team data
   data.teams.forEach((team, index) => {
-    summaryData.push([
+    summarySheet.addRow([
       index + 1,
       team.name,
       team.projectTitle,
@@ -45,11 +60,14 @@ const createConsolidatedWorkbook = (data) => {
     ]);
   });
 
-  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  summarySheet['!cols'] = [{ width: 8 }, { width: 15 }, { width: 35 }, { width: 15 }, { width: 15 }];
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+  // Set column widths
+  summarySheet.columns = [
+    { width: 8 }, { width: 15 }, { width: 35 }, { width: 15 }, { width: 15 }
+  ];
 
   // Detailed Sheet with all jury scores
+  const detailedSheet = workbook.addWorksheet('Detailed Scores');
+  
   const detailedHeaders = [
     'Rank', 'Team Name', 'Project Title', 'Members'
   ];
@@ -69,8 +87,10 @@ const createConsolidatedWorkbook = (data) => {
   
   detailedHeaders.push('Overall Average', 'Total Evaluators');
   
-  const detailedData = [detailedHeaders];
+  // Add headers to sheet
+  detailedSheet.addRow(detailedHeaders);
   
+  // Add team data
   data.teams.forEach((team, index) => {
     const row = [
       index + 1,
@@ -100,32 +120,38 @@ const createConsolidatedWorkbook = (data) => {
     });
     
     row.push(parseFloat(team.averageScore), team.submittedJuries);
-    detailedData.push(row);
+    detailedSheet.addRow(row);
   });
   
-  const detailedSheet = XLSX.utils.aoa_to_sheet(detailedData);
-  detailedSheet['!cols'] = detailedHeaders.map(() => ({ width: 12 }));
-  XLSX.utils.book_append_sheet(workbook, detailedSheet, 'Detailed Scores');
+  // Set column widths
+  detailedSheet.columns = detailedHeaders.map(() => ({ width: 12 }));
 
   return workbook;
 };
 
 // Create individual jury workbook (legacy support)
-const createIndividualWorkbook = (scores, juryId) => {
+const createIndividualWorkbook = async (scores, juryId, ExcelJS) => {
   const jury = juryProfiles.find(j => j.id === parseInt(juryId));
   const juryName = jury ? jury.name : `Jury ${juryId}`;
 
-  const data = [
-    ['Team Name', 'Project Title', 'Members', ...evaluationCriteria.map(c => `${c.name} (${c.maxMarks})`), `Total (${evaluationCriteria.reduce((sum, c) => sum + c.maxMarks, 0)})`]
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Marksheet');
+  
+  // Add header row
+  const headers = ['Team Name', 'Project Title', 'Members', 
+    ...evaluationCriteria.map(c => `${c.name} (${c.maxMarks})`), 
+    `Total (${evaluationCriteria.reduce((sum, c) => sum + c.maxMarks, 0)})`
   ];
+  worksheet.addRow(headers);
 
+  // Add team data
   teams.forEach(team => {
     const teamScores = scores[team.id] || {};
     const total = evaluationCriteria.reduce((sum, criteria) => {
       return sum + (teamScores[criteria.name] || 0);
     }, 0);
 
-    data.push([
+    worksheet.addRow([
       team.name,
       team.projectTitle,
       team.members.join(', '),
@@ -134,14 +160,12 @@ const createIndividualWorkbook = (scores, juryId) => {
     ]);
   });
 
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
-  worksheet['!cols'] = [
+  // Set column widths
+  worksheet.columns = [
     { width: 15 }, { width: 30 }, { width: 40 },
     ...evaluationCriteria.map(() => ({ width: 12 })),
     { width: 10 }
   ];
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Marksheet');
 
   return workbook;
 };
