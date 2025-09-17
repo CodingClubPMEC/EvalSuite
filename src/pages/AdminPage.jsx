@@ -11,12 +11,20 @@ import {
 import { exportToExcel } from '../utils/excelExport';
 import { evaluationCriteria } from '../data/juryData';
 import { getJuryEvaluation } from '../utils/dataStorage';
+import { configManager } from '../config/hackathonConfig';
 
 function AdminPage() {
+  const sessionInfo = configManager.getSessionInfo();
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [consolidatedData, setConsolidatedData] = useState(null);
   const [leaderboard, setLeaderboard] = useState(null);
+
+  // Update document title dynamically
+  useEffect(() => {
+    const systemName = sessionInfo.systemName || 'EvalSuite';
+    document.title = `${systemName} - Admin Dashboard`;
+  }, [sessionInfo.systemName]);
 
   // Load data on component mount
   useEffect(() => {
@@ -29,8 +37,13 @@ function AdminPage() {
     setLeaderboard(getLeaderboard());
   };
 
-  const handleDownloadConsolidated = () => {
-    if (consolidatedData) {
+  const handleDownloadConsolidated = async () => {
+    try {
+      if (!consolidatedData) {
+        alert('No consolidated data available to download.');
+        return;
+      }
+      
       // Create export data for consolidated marksheet
       const exportData = {
         consolidated: true,
@@ -40,59 +53,104 @@ function AdminPage() {
         generatedAt: consolidatedData.generatedAt
       };
       
-      exportToExcel(exportData, 'admin-consolidated');
+      await exportToExcel(exportData, 'admin-consolidated');
       alert('Consolidated marksheet downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading consolidated marksheet:', error);
+      alert('Error downloading consolidated marksheet. Please try again.');
     }
   };
 
-  const handleDownloadIndividualJury = (juryId, juryName) => {
-    const juryEvaluation = getJuryEvaluation(juryId);
-    if (juryEvaluation && juryEvaluation.isSubmitted) {
-      exportToExcel(juryEvaluation.scores, juryId);
-      alert(`${juryName}'s marksheet downloaded successfully!`);
-    } else {
-      alert(`${juryName} hasn't saved any evaluation data yet.`);
+  const handleDownloadIndividualJury = async (juryId, juryName) => {
+    try {
+      const juryEvaluation = getJuryEvaluation(juryId);
+      if (juryEvaluation && juryEvaluation.isSubmitted) {
+        await exportToExcel(juryEvaluation.scores, juryId);
+        alert(`${juryName}'s marksheet downloaded successfully!`);
+      } else {
+        alert(`${juryName} hasn't saved any evaluation data yet.`);
+      }
+    } catch (error) {
+      console.error('Error downloading individual marksheet:', error);
+      alert(`Error downloading ${juryName}'s marksheet. Please try again.`);
     }
   };
 
-  const handleDownloadAllIndividual = () => {
+  const handleDownloadAllIndividual = async () => {
     if (submissionStatus?.completed.length === 0) {
       alert('No completed evaluations to download.');
       return;
     }
 
     let downloadCount = 0;
-    submissionStatus.completed.forEach(jury => {
+    for (const jury of submissionStatus.completed) {
       const juryEvaluation = getJuryEvaluation(jury.id);
       if (juryEvaluation && juryEvaluation.isSubmitted) {
-        setTimeout(() => {
-          exportToExcel(juryEvaluation.scores, jury.id);
-        }, downloadCount * 500); // Stagger downloads by 500ms
-        downloadCount++;
+        try {
+          await new Promise(resolve => setTimeout(resolve, downloadCount * 500)); // Stagger downloads
+          await exportToExcel(juryEvaluation.scores, jury.id);
+          downloadCount++;
+        } catch (error) {
+          console.error(`Error downloading ${jury.name}'s marksheet:`, error);
+        }
       }
-    });
+    }
 
-    alert(`Downloading ${downloadCount} individual marksheets...`);
+    alert(`Downloaded ${downloadCount} individual marksheets.`);
   };
 
   const handleResetData = () => {
-    if (window.confirm('Are you sure you want to reset all evaluation data? This action cannot be undone.')) {
-      resetAllEvaluations();
-      loadData();
-      alert('All evaluation data has been reset.');
+    try {
+      const confirmation = window.confirm(
+        'Are you sure you want to reset all evaluation data?\n\n' +
+        'This will permanently delete:\n' +
+        '• All jury evaluations\n' +
+        '• All saved scores\n' +
+        '• All submission records\n\n' +
+        'This action cannot be undone.'
+      );
+      
+      if (confirmation) {
+        const doubleConfirmation = window.confirm(
+          'This is your final warning.\n\n' +
+          'Type YES in the next dialog to confirm reset.'
+        );
+        
+        if (doubleConfirmation) {
+          const textConfirmation = window.prompt(
+            'Please type "YES" (in capital letters) to confirm the reset:'
+          );
+          
+          if (textConfirmation === 'YES') {
+            resetAllEvaluations();
+            loadData();
+            alert('All evaluation data has been successfully reset.');
+          } else {
+            alert('Reset cancelled. Invalid confirmation text.');
+          }
+        } else {
+          alert('Reset cancelled.');
+        }
+      }
+    } catch (error) {
+      console.error('Error resetting data:', error);
+      alert('Error resetting data. Please try again or contact support.');
     }
   };
 
   const TabButton = ({ id, label, isActive, onClick }) => (
     <button
       onClick={() => onClick(id)}
-      className={`px-6 py-3 font-bold tracking-wide text-sm transition-all duration-200 border-b-2 ${
+      className={`px-8 py-4 font-bold tracking-wide text-sm transition-all duration-300 border-b-3 rounded-t-2xl relative overflow-hidden group ${
         isActive 
-          ? 'border-orange-500 text-orange-500 bg-orange-50' 
-          : 'border-transparent text-slate-600 hover:text-slate-800 hover:border-slate-300'
+          ? 'border-orange-500 text-orange-500 bg-gradient-to-t from-orange-50 to-white shadow-lg' 
+          : 'border-transparent text-slate-600 hover:text-slate-800 hover:border-slate-300 hover:bg-slate-50'
       }`}
     >
-      {label}
+      <div className={`absolute inset-0 bg-gradient-to-r from-orange-500/10 to-orange-600/10 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ${
+        isActive ? 'translate-y-0' : ''
+      }`}></div>
+      <span className="relative z-10">{label}</span>
     </button>
   );
 
@@ -100,37 +158,48 @@ function AdminPage() {
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
-      {/* Admin Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 py-8 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent"></div>
+      {/* Enhanced Admin Header */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-12 relative overflow-hidden">
+        {/* Enhanced Background Pattern */}
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/15 to-purple-600/10"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_70%,rgba(249,115,22,0.15),transparent_50%)]"></div>
         
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="bg-white/5 backdrop-blur-sm rounded-lg border border-white/10 p-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-2xl">👨‍💼</span>
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 p-8 shadow-2xl">
+            <div className="flex items-center justify-between flex-wrap gap-6">
+              <div className="flex items-center space-x-6">
+                <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-xl">
+                  <span className="text-white font-bold text-3xl">👨‍💼</span>
                 </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-white tracking-wide mb-1">ADMIN DASHBOARD</h1>
-                  <p className="text-sm text-gray-300 font-medium">Consolidated Evaluation Management</p>
-                  <p className="text-xs text-orange-400 font-semibold uppercase tracking-wider">Internal Hackathon Control Panel</p>
+                <div className="space-y-2">
+                  <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">ADMIN DASHBOARD</h1>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-semibold text-gray-200">Consolidated {sessionInfo.evaluationPhase || 'Evaluation'} Management</span>
+                    <span className="bg-orange-500/30 backdrop-blur-sm rounded-full px-4 py-2 text-sm font-bold text-orange-300">{sessionInfo.title} Control Panel</span>
+                  </div>
                 </div>
               </div>
               
               <div className="flex items-center space-x-4">
                 <Link 
                   to="/config" 
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 font-bold tracking-wide text-sm rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 flex items-center space-x-2"
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-3 font-bold tracking-wide text-sm rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 flex items-center space-x-2 group"
                 >
                   <span>⚙️</span>
                   <span>SYSTEM CONFIG</span>
+                  <svg className="w-4 h-4 transition-transform group-hover:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
                 </Link>
                 <Link 
                   to="/" 
-                  className="text-orange-400 hover:text-white flex items-center font-medium tracking-wide text-sm transition-colors duration-200 px-4 py-2 rounded-lg border border-orange-400/30 hover:border-white/30"
+                  className="text-orange-300 hover:text-white flex items-center font-semibold tracking-wide text-sm transition-all duration-300 px-6 py-3 rounded-2xl bg-white/10 backdrop-blur-sm border border-orange-400/30 hover:border-white/50 hover:bg-white/20 transform hover:scale-105 group"
                 >
-                  ← BACK TO HOME
+                  <svg className="w-4 h-4 mr-2 transition-transform group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  BACK TO HOME
                 </Link>
               </div>
             </div>
@@ -138,13 +207,13 @@ function AdminPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 py-12 bg-gradient-to-b from-slate-50 to-white">
-        <div className="container mx-auto px-4">
+      {/* Enhanced Main Content */}
+      <div className="flex-1 py-16 bg-gradient-to-b from-gray-50 via-white to-gray-50">
+        <div className="container mx-auto px-6">
           
-          {/* Tab Navigation */}
-          <div className="bg-white rounded-t-xl shadow-lg border-b border-gray-200 mb-0">
-            <div className="flex space-x-0 overflow-x-auto">
+          {/* Enhanced Tab Navigation */}
+          <div className="bg-white rounded-t-3xl shadow-xl border border-gray-200 mb-0 overflow-hidden">
+            <div className="flex space-x-0 overflow-x-auto bg-gradient-to-r from-gray-50 to-white">
               <TabButton id="overview" label="📊 OVERVIEW" isActive={activeTab === 'overview'} onClick={setActiveTab} />
               <TabButton id="consolidated" label="📋 CONSOLIDATED MARKSHEET" isActive={activeTab === 'consolidated'} onClick={setActiveTab} />
               <TabButton id="leaderboard" label="🏆 LEADERBOARD" isActive={activeTab === 'leaderboard'} onClick={setActiveTab} />
@@ -159,7 +228,7 @@ function AdminPage() {
             {activeTab === 'overview' && (
               <div className="space-y-8">
                 <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold text-slate-800 mb-4">EVALUATION OVERVIEW</h2>
+                  <h2 className="text-3xl font-bold text-slate-800 mb-4">{sessionInfo.evaluationPhase?.toUpperCase() || 'EVALUATION'} OVERVIEW</h2>
                   <div className="w-20 h-1 bg-gradient-to-r from-orange-500 to-orange-600 mx-auto"></div>
                 </div>
 
@@ -168,7 +237,7 @@ function AdminPage() {
                     <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-blue-600 text-sm font-semibold uppercase tracking-wider">Total Juries</p>
+                          <p className="text-blue-600 text-sm font-semibold uppercase tracking-wider">Total {sessionInfo.juryLabel || 'Evaluators'}</p>
                           <p className="text-3xl font-bold text-blue-800">{submissionStatus.total}</p>
                         </div>
                         <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">

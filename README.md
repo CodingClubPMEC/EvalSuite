@@ -24,6 +24,7 @@ A modern web application for jury members to evaluate and mark teams participati
 - **Team Management**: Display of 5 participating teams with member details
 - **Evaluation Criteria**: 5 scoring categories (Innovation, Feasibility, Presentation, Impact, Technical Quality)
 - **Score Validation**: Automatic enforcement of maximum marks per criteria
+- **Data Persistence**: Automatic saving to browser localStorage with refresh protection
 - **Excel Export**: One-click export to Excel with formatted data and timestamps
 - **Routing**: Seamless navigation between jury profiles and marking pages
 
@@ -103,6 +104,8 @@ You can modify this data file to match your actual hackathon participants and cr
 ### Features:
 - **Input Validation**: Scores cannot exceed maximum marks for each criteria
 - **Real-time Calculation**: Totals update automatically as you enter scores
+- **Data Persistence**: Your scores are automatically saved and restored after page refresh
+- **Auto-save**: Changes are saved automatically every 3 seconds
 - **Excel Export**: Downloaded files include timestamps and jury information
 - **Navigation**: Easy return to homepage or switch between jury profiles
 
@@ -113,6 +116,24 @@ The application is fully responsive and works on:
 - Tablets
 - Mobile phones
 - Different screen orientations
+
+## 💾 Data Persistence
+
+The application automatically saves your evaluation data to prevent loss:
+
+- **Auto-save**: Scores are automatically saved every 3 seconds as you type
+- **Page Refresh Protection**: Data persists when you refresh the page or close/reopen your browser
+- **Backup System**: Automatic backups are created before any data modifications
+- **Storage Status**: Visual indicator shows when data is saved and storage health
+- **Offline Support**: Data is stored locally in your browser and doesn't require internet connection
+
+### Data Storage Features:
+- ✅ Automatic saving every 3 seconds
+- ✅ Manual save button for immediate saving
+- ✅ Save before page close/navigation
+- ✅ Data validation and corruption recovery
+- ✅ Visual save status indicators
+- ✅ Backup and restore functionality
 
 ## 🔒 Excel Export Details
 

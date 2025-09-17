@@ -9,7 +9,13 @@ export const hackathonConfig = {
     subtitle: "for Smart India Hackathon",
     organization: "Parala Maharaja Engineering College",
     organizationShort: "PMEC",
+    systemName: "EvalSuite", // New field for system/platform name
     logoPath: "/pmec-logo.png",
+    eventType: "Competitive Hackathon", // New field for event description
+    evaluationPhase: "Assessment Phase", // New field for current phase
+    participantLabel: "Teams", // New field for participant designation
+    juryLabel: "Expert Evaluation Panel", // New field for jury designation
+    systemPurpose: "Professional evaluation and scoring", // New field for system description
     theme: {
       primary: "orange",
       secondary: "slate"

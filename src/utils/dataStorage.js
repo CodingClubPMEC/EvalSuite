@@ -1,69 +1,147 @@
 // Data Storage Utility for Jury Evaluations
-import { configManager } from '../config/hackathonConfig';
 import { juryProfiles, teams, evaluationCriteria } from '../data/juryData';
 
 const STORAGE_KEY = 'sih_jury_evaluations';
+const BACKUP_STORAGE_KEY = 'sih_jury_evaluations_backup';
+
+// Validate stored data structure
+const validateStoredData = (data) => {
+  if (!data || typeof data !== 'object') return false;
+  if (!data.evaluations || typeof data.evaluations !== 'object') return false;
+  if (!data.lastUpdated) return false;
+  
+  // Validate each jury evaluation structure
+  for (const juryId in data.evaluations) {
+    const evaluation = data.evaluations[juryId];
+    if (!evaluation.juryInfo || !evaluation.scores || typeof evaluation.scores !== 'object') {
+      return false;
+    }
+  }
+  
+  return true;
+};
+
+// Create backup of current data
+const createBackup = (data) => {
+  try {
+    const backup = {
+      data: data,
+      timestamp: new Date().toISOString(),
+      version: '2025'
+    };
+    localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(backup));
+  } catch (error) {
+    console.warn('Failed to create backup:', error);
+  }
+};
+
+// Restore from backup if main data is corrupted
+const restoreFromBackup = () => {
+  try {
+    const backupStr = localStorage.getItem(BACKUP_STORAGE_KEY);
+    if (backupStr) {
+      const backup = JSON.parse(backupStr);
+      if (backup.data && validateStoredData(backup.data)) {
+        console.log('Restored data from backup');
+        return backup.data;
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to restore from backup:', error);
+  }
+  return null;
+};
+
+// Safe localStorage operations with error handling
+const safeSetItem = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch (error) {
+    console.error('Failed to save to localStorage:', error);
+    return false;
+  }
+};
+
+const safeGetItem = (key) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : null;
+  } catch (error) {
+    console.error('Failed to read from localStorage:', error);
+    return null;
+  }
+};
 
 // Initialize storage structure
 const initializeStorage = () => {
-  const existingData = localStorage.getItem(STORAGE_KEY);
-  if (!existingData) {
-    const currentJuries = configManager.getActiveJuryMembers();
-    const currentTeams = configManager.getActiveTeams();
-    const currentCriteria = configManager.getActiveEvaluationCriteria();
-    
-    const initialData = {
-      evaluations: {},
-      lastUpdated: new Date().toISOString(),
-      isCompleted: false,
-      configVersion: configManager.getSessionInfo().year
+  const existingData = safeGetItem(STORAGE_KEY);
+  
+  // Try to validate existing data
+  if (existingData && validateStoredData(existingData)) {
+    const currentVersion = '2025';
+    if (existingData.configVersion !== currentVersion) {
+      // Configuration changed, need to update storage structure
+      return updateStorageForNewConfig(existingData);
+    }
+    return existingData;
+  }
+  
+  // If existing data is invalid, try to restore from backup
+  if (existingData && !validateStoredData(existingData)) {
+    console.warn('Corrupted data detected, attempting to restore from backup...');
+    const restoredData = restoreFromBackup();
+    if (restoredData) {
+      safeSetItem(STORAGE_KEY, restoredData);
+      return restoredData;
+    }
+  }
+  
+  // Create fresh data structure
+  const currentJuries = juryProfiles;
+  const currentTeams = teams;
+  const currentCriteria = evaluationCriteria;
+  
+  const initialData = {
+    evaluations: {},
+    lastUpdated: new Date().toISOString(),
+    isCompleted: false,
+    configVersion: '2025'
+  };
+  
+  // Initialize empty evaluations for all active juries
+  currentJuries.forEach(jury => {
+    initialData.evaluations[jury.id] = {
+      juryInfo: jury,
+      scores: {},
+      submittedAt: null,
+      isSubmitted: false
     };
     
-    // Initialize empty evaluations for all active juries
-    currentJuries.forEach(jury => {
-      initialData.evaluations[jury.id] = {
-        juryInfo: jury,
-        scores: {},
-        submittedAt: null,
-        isSubmitted: false
-      };
-      
-      // Initialize empty scores for each active team
-      currentTeams.forEach(team => {
-        initialData.evaluations[jury.id].scores[team.id] = {};
-        currentCriteria.forEach(criteria => {
-          initialData.evaluations[jury.id].scores[team.id][criteria.name] = 0;
-        });
+    // Initialize empty scores for each active team
+    currentTeams.forEach(team => {
+      initialData.evaluations[jury.id].scores[team.id] = {};
+      currentCriteria.forEach(criteria => {
+        initialData.evaluations[jury.id].scores[team.id][criteria.name] = 0;
       });
     });
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
-    return initialData;
-  }
+  });
   
-  const data = JSON.parse(existingData);
-  
-  // Check if configuration has changed and update storage accordingly
-  const currentVersion = configManager.getSessionInfo().year;
-  if (data.configVersion !== currentVersion) {
-    // Configuration changed, need to update storage structure
-    return updateStorageForNewConfig(data);
-  }
-  
-  return data;
+  safeSetItem(STORAGE_KEY, initialData);
+  return initialData;
 };
 
 // Update storage structure when configuration changes
 const updateStorageForNewConfig = (existingData) => {
-  const currentJuries = configManager.getActiveJuryMembers();
-  const currentTeams = configManager.getActiveTeams();
-  const currentCriteria = configManager.getActiveEvaluationCriteria();
+  const currentJuries = juryProfiles;
+  const currentTeams = teams;
+  const currentCriteria = evaluationCriteria;
   
   // Preserve existing evaluation data where possible
   const updatedData = {
     ...existingData,
     lastUpdated: new Date().toISOString(),
-    configVersion: configManager.getSessionInfo().year
+    configVersion: '2025'
   };
   
   // Update jury evaluations structure
@@ -94,7 +172,9 @@ const updateStorageForNewConfig = (existingData) => {
   
   updatedData.evaluations = newEvaluations;
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedData));
+  // Create backup before saving
+  createBackup(updatedData);
+  safeSetItem(STORAGE_KEY, updatedData);
   return updatedData;
 };
 
@@ -106,13 +186,21 @@ export const getAllEvaluations = () => {
 // Save jury evaluation (allows multiple saves/updates)
 export const saveJuryEvaluation = (juryId, scores) => {
   const data = getAllEvaluations();
+  
+  // Create backup before modifying
+  createBackup(data);
+  
   data.evaluations[juryId].scores = scores;
   data.evaluations[juryId].isSubmitted = true; // Mark as having data
   data.evaluations[juryId].submittedAt = new Date().toISOString();
   data.evaluations[juryId].lastModified = new Date().toISOString();
   data.lastUpdated = new Date().toISOString();
   
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  const success = safeSetItem(STORAGE_KEY, data);
+  if (!success) {
+    throw new Error('Failed to save evaluation data');
+  }
+  
   return data;
 };
 
@@ -240,16 +328,19 @@ export const getAllSubmissionStatus = () => {
 export const cleanupJuryEvaluationData = (juryId) => {
   const data = getAllEvaluations();
   if (data.evaluations[juryId]) {
+    createBackup(data);
     delete data.evaluations[juryId];
     data.lastUpdated = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    safeSetItem(STORAGE_KEY, data);
   }
 };
 
 // Clean up evaluation data when team is deleted
 export const cleanupTeamEvaluationData = (teamId) => {
   const data = getAllEvaluations();
-  const currentJuries = configManager.getActiveJuryMembers();
+  const currentJuries = juryProfiles;
+  
+  createBackup(data);
   
   // Remove team scores from all jury evaluations
   currentJuries.forEach(jury => {
@@ -259,14 +350,16 @@ export const cleanupTeamEvaluationData = (teamId) => {
   });
   
   data.lastUpdated = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  safeSetItem(STORAGE_KEY, data);
 };
 
 // Clean up evaluation data when criteria is deleted
 export const cleanupCriteriaEvaluationData = (criteriaName) => {
   const data = getAllEvaluations();
-  const currentJuries = configManager.getActiveJuryMembers();
-  const currentTeams = configManager.getActiveTeams();
+  const currentJuries = juryProfiles;
+  const currentTeams = teams;
+  
+  createBackup(data);
   
   // Remove criteria scores from all evaluations
   currentJuries.forEach(jury => {
@@ -281,11 +374,77 @@ export const cleanupCriteriaEvaluationData = (criteriaName) => {
   });
   
   data.lastUpdated = new Date().toISOString();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  safeSetItem(STORAGE_KEY, data);
 };
 
 // Reset all data (admin function)
 export const resetAllEvaluations = () => {
+  const data = getAllEvaluations();
+  createBackup(data); // Backup before reset
   localStorage.removeItem(STORAGE_KEY);
   return initializeStorage();
+};
+
+// Storage health utilities
+export const getStorageInfo = () => {
+  const mainData = safeGetItem(STORAGE_KEY);
+  const backupData = safeGetItem(BACKUP_STORAGE_KEY);
+  
+  return {
+    hasMainData: !!mainData,
+    hasBackup: !!backupData,
+    mainDataValid: mainData ? validateStoredData(mainData) : false,
+    lastUpdated: mainData?.lastUpdated || null,
+    lastBackup: backupData?.timestamp || null,
+    storageSupported: typeof(Storage) !== 'undefined',
+    estimatedSize: mainData ? JSON.stringify(mainData).length : 0
+  };
+};
+
+// Export data for manual backup
+export const exportAllData = () => {
+  const data = getAllEvaluations();
+  const exportData = {
+    ...data,
+    exportedAt: new Date().toISOString(),
+    version: '1.0'
+  };
+  
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+    type: 'application/json'
+  });
+  
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sih_evaluation_backup_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// Import data from manual backup
+export const importData = (jsonData) => {
+  try {
+    const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+    
+    if (!validateStoredData(data)) {
+      throw new Error('Invalid data format');
+    }
+    
+    // Create backup of current data before importing
+    const currentData = getAllEvaluations();
+    createBackup(currentData);
+    
+    // Import the new data
+    const success = safeSetItem(STORAGE_KEY, data);
+    if (!success) {
+      throw new Error('Failed to save imported data');
+    }
+    
+    return { success: true, message: 'Data imported successfully' };
+  } catch (error) {
+    return { success: false, message: `Import failed: ${error.message}` };
+  }
 };
