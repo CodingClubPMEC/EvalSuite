@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 import MarksheetTable from '../components/MarksheetTable';
 import { LoadingSpinner, PageLoading } from '../components/LoadingComponents';
 import { useDebounce } from '../hooks/useDebounce';
-import { saveJuryEvaluation, getJuryEvaluation } from '../utils/dataStorage';
+import { saveJuryEvaluation, getJuryEvaluation, autoSaveEvaluation } from '../services/apiService';
 import { configManager } from '../config/hackathonConfig';
 
 // Lazy load non-critical components
@@ -44,7 +44,7 @@ function MarkingPage() {
     
     try {
       setIsSaving(true);
-      await saveJuryEvaluation(parseInt(juryId), scores);
+      await autoSaveEvaluation(parseInt(juryId), scores);
       const currentTime = new Date().toISOString();
       setLastSaved(currentTime);
       setHasUnsavedChanges(false);
@@ -72,7 +72,7 @@ function MarkingPage() {
         setError(null);
         
         if (jury) {
-          const existingEvaluation = getJuryEvaluation(parseInt(juryId));
+          const existingEvaluation = await getJuryEvaluation(parseInt(juryId));
           if (existingEvaluation && existingEvaluation.scores) {
             setScores(existingEvaluation.scores);
             setLastSaved(existingEvaluation.submittedAt || existingEvaluation.lastUpdated);
@@ -107,11 +107,11 @@ function MarkingPage() {
 
   // Save data when page becomes hidden (user switches tabs/minimizes)
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.hidden && Object.keys(scores).length > 0) {
         // Save immediately when page becomes hidden
         try {
-          saveJuryEvaluation(parseInt(juryId), scores);
+          await saveJuryEvaluation(parseInt(juryId), scores);
         } catch (error) {
           console.error('Failed to save on visibility change:', error);
         }
@@ -128,12 +128,10 @@ function MarkingPage() {
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (Object.keys(scores).length > 0) {
-        // Save immediately before unload
-        try {
-          saveJuryEvaluation(parseInt(juryId), scores);
-        } catch (error) {
+        // Save immediately before unload (best effort - may not complete)
+        saveJuryEvaluation(parseInt(juryId), scores).catch(error => {
           console.error('Failed to save before unload:', error);
-        }
+        });
 
         // Show confirmation dialog if there are unsaved changes
         if (hasUnsavedChanges) {
@@ -189,7 +187,7 @@ function MarkingPage() {
     if (autoSaveEnabled) {
       setTimeout(async () => {
         try {
-          await saveJuryEvaluation(parseInt(juryId), newScores);
+          await autoSaveEvaluation(parseInt(juryId), newScores);
           console.log('Immediate save successful');
         } catch (error) {
           console.error('Immediate save failed:', error);
@@ -202,7 +200,7 @@ function MarkingPage() {
     setIsSaving(true);
     setError(null);
     try {
-      // Save evaluation to localStorage
+      // Save evaluation to database
       await saveJuryEvaluation(parseInt(juryId), scores);
       const currentTime = new Date().toISOString();
       setLastSaved(currentTime);

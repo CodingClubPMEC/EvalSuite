@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getStorageInfo } from '../utils/dataStorage';
+import { getStorageInfo } from '../services/apiService';
 
 const DataPersistenceStatus = ({ show = true, className = "" }) => {
   const [storageInfo, setStorageInfo] = useState(null);
@@ -7,7 +7,7 @@ const DataPersistenceStatus = ({ show = true, className = "" }) => {
 
   useEffect(() => {
     if (show) {
-      setStorageInfo(getStorageInfo());
+      getStorageInfo().then(setStorageInfo).catch(console.error);
     }
   }, [show]);
 
@@ -28,9 +28,10 @@ const DataPersistenceStatus = ({ show = true, className = "" }) => {
   };
 
   const getStatusMessage = () => {
-    if (!storageInfo.hasMainData) return 'No data saved';
-    if (!storageInfo.mainDataValid) return 'Data needs validation';
-    return 'Data saved locally';
+    if (!storageInfo.hasMainData) return 'Database disconnected';
+    if (!storageInfo.mainDataValid) return 'Database connection error';
+    if (storageInfo.connectionStatus === 'Connected') return 'Database connected';
+    return 'Data saved to database';
   };
 
   return (
@@ -54,9 +55,9 @@ const DataPersistenceStatus = ({ show = true, className = "" }) => {
         <div className="px-3 pb-3 border-t border-gray-100 mt-2 pt-2">
           <div className="space-y-1 text-xs text-gray-600">
             <div className="flex justify-between">
-              <span>Storage Available:</span>
-              <span className="font-medium text-green-600">
-                {storageInfo.storageSupported ? 'Yes' : 'No'}
+              <span>Database Connection:</span>
+              <span className={`font-medium ${storageInfo.connectionStatus === 'Connected' ? 'text-green-600' : 'text-red-600'}`}>
+                {storageInfo.connectionStatus || 'Unknown'}
               </span>
             </div>
             
@@ -88,7 +89,7 @@ const DataPersistenceStatus = ({ show = true, className = "" }) => {
           
           <div className="mt-2 pt-2 border-t border-gray-100">
             <p className="text-xs text-gray-500">
-              💡 Your evaluation data is automatically saved to your browser's local storage and will persist across sessions.
+              💡 Your evaluation data is automatically saved to the MongoDB database and synchronized in real-time across all sessions.
             </p>
           </div>
         </div>
