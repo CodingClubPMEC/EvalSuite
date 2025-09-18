@@ -1,5 +1,5 @@
 // Data Storage Utility for Jury Evaluations
-import { juryProfiles, teams, evaluationCriteria } from '../data/juryData';
+import { configManager } from '../config/hackathonConfig';
 
 const STORAGE_KEY = 'sih_jury_evaluations';
 const BACKUP_STORAGE_KEY = 'sih_jury_evaluations_backup';
@@ -98,9 +98,9 @@ const initializeStorage = () => {
   }
   
   // Create fresh data structure
-  const currentJuries = juryProfiles;
-  const currentTeams = teams;
-  const currentCriteria = evaluationCriteria;
+  const currentJuries = configManager.getActiveJuryMembers();
+  const currentTeams = configManager.getActiveTeams();
+  const currentCriteria = configManager.getActiveEvaluationCriteria();
   
   const initialData = {
     evaluations: {},
@@ -133,9 +133,9 @@ const initializeStorage = () => {
 
 // Update storage structure when configuration changes
 const updateStorageForNewConfig = (existingData) => {
-  const currentJuries = juryProfiles;
-  const currentTeams = teams;
-  const currentCriteria = evaluationCriteria;
+  const currentJuries = configManager.getActiveJuryMembers();
+  const currentTeams = configManager.getActiveTeams();
+  const currentCriteria = configManager.getActiveEvaluationCriteria();
   
   // Preserve existing evaluation data where possible
   const updatedData = {
@@ -185,23 +185,44 @@ export const getAllEvaluations = () => {
 
 // Save jury evaluation (allows multiple saves/updates)
 export const saveJuryEvaluation = (juryId, scores) => {
-  const data = getAllEvaluations();
-  
-  // Create backup before modifying
-  createBackup(data);
-  
-  data.evaluations[juryId].scores = scores;
-  data.evaluations[juryId].isSubmitted = true; // Mark as having data
-  data.evaluations[juryId].submittedAt = new Date().toISOString();
-  data.evaluations[juryId].lastModified = new Date().toISOString();
-  data.lastUpdated = new Date().toISOString();
-  
-  const success = safeSetItem(STORAGE_KEY, data);
-  if (!success) {
-    throw new Error('Failed to save evaluation data');
+  try {
+    const data = getAllEvaluations();
+    
+    // Ensure jury evaluation exists
+    if (!data.evaluations[juryId]) {
+      const jury = configManager.getActiveJuryMembers().find(j => j.id === juryId);
+      if (!jury) {
+        throw new Error(`Jury with ID ${juryId} not found`);
+      }
+      
+      data.evaluations[juryId] = {
+        juryInfo: jury,
+        scores: {},
+        submittedAt: null,
+        isSubmitted: false
+      };
+    }
+    
+    // Create backup before modifying
+    createBackup(data);
+    
+    data.evaluations[juryId].scores = { ...scores }; // Clone scores to avoid reference issues
+    data.evaluations[juryId].isSubmitted = true; // Mark as having data
+    data.evaluations[juryId].submittedAt = new Date().toISOString();
+    data.evaluations[juryId].lastModified = new Date().toISOString();
+    data.lastUpdated = new Date().toISOString();
+    
+    const success = safeSetItem(STORAGE_KEY, data);
+    if (!success) {
+      throw new Error('Failed to save to localStorage');
+    }
+    
+    console.log('Evaluation saved successfully for jury:', juryId);
+    return true;
+  } catch (error) {
+    console.error('Save evaluation error:', error);
+    throw error; // Re-throw to allow caller to handle
   }
-  
-  return data;
 };
 
 // Get specific jury evaluation
@@ -213,6 +234,10 @@ export const getJuryEvaluation = (juryId) => {
 // Get consolidated marksheet (all juries combined)
 export const getConsolidatedMarksheet = () => {
   const data = getAllEvaluations();
+  const teams = configManager.getActiveTeams();
+  const evaluationCriteria = configManager.getActiveEvaluationCriteria();
+  const juryProfiles = configManager.getActiveJuryMembers();
+  
   const consolidated = {
     teams: [],
     juries: juryProfiles,
@@ -298,6 +323,8 @@ export const getLeaderboard = () => {
 // Check if all juries have submitted
 export const getAllSubmissionStatus = () => {
   const data = getAllEvaluations();
+  const juryProfiles = configManager.getActiveJuryMembers();
+  
   const status = {
     total: juryProfiles.length,
     submitted: 0,
@@ -338,7 +365,7 @@ export const cleanupJuryEvaluationData = (juryId) => {
 // Clean up evaluation data when team is deleted
 export const cleanupTeamEvaluationData = (teamId) => {
   const data = getAllEvaluations();
-  const currentJuries = juryProfiles;
+  const currentJuries = configManager.getActiveJuryMembers();
   
   createBackup(data);
   
@@ -356,8 +383,8 @@ export const cleanupTeamEvaluationData = (teamId) => {
 // Clean up evaluation data when criteria is deleted
 export const cleanupCriteriaEvaluationData = (criteriaName) => {
   const data = getAllEvaluations();
-  const currentJuries = juryProfiles;
-  const currentTeams = teams;
+  const currentJuries = configManager.getActiveJuryMembers();
+  const currentTeams = configManager.getActiveTeams();
   
   createBackup(data);
   

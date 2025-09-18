@@ -1,13 +1,28 @@
 import { useState, useEffect, memo, useCallback, useMemo } from 'react';
-import { teams, evaluationCriteria } from '../data/juryData';
+import { configManager } from '../config/hackathonConfig';
 import { LoadingSpinner } from './LoadingComponents';
 import { ScoreInput } from '../hooks/useFormValidation.jsx';
-import { useVirtualization } from '../hooks/useVirtualization';
 
 const MarksheetTable = memo(function MarksheetTable({ onScoreChange, initialScores = {} }) {
   const [scores, setScores] = useState({});
   const [isMobile, setIsMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [teams, setTeams] = useState([]);
+  const [evaluationCriteria, setEvaluationCriteria] = useState([]);
+
+  // Load dynamic teams and criteria
+  useEffect(() => {
+    const loadData = () => {
+      setTeams(configManager.getActiveTeams());
+      setEvaluationCriteria(configManager.getActiveEvaluationCriteria());
+    };
+    
+    loadData();
+    
+    // Listen for configuration changes (optional - for real-time updates)
+    const interval = setInterval(loadData, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Check for mobile screen size
   useEffect(() => {
@@ -22,18 +37,20 @@ const MarksheetTable = memo(function MarksheetTable({ onScoreChange, initialScor
 
   // Initialize scores state with either provided initialScores or defaults
   useEffect(() => {
-    const defaultScores = {};
-    teams.forEach(team => {
-      defaultScores[team.id] = {};
-      evaluationCriteria.forEach(criteria => {
-        // Use initialScores if available, otherwise default to 0
-        defaultScores[team.id][criteria.name] = 
-          initialScores[team.id]?.[criteria.name] ?? 0;
+    if (teams.length > 0 && evaluationCriteria.length > 0) {
+      const defaultScores = {};
+      teams.forEach(team => {
+        defaultScores[team.id] = {};
+        evaluationCriteria.forEach(criteria => {
+          // Use initialScores if available, otherwise default to 0
+          defaultScores[team.id][criteria.name] = 
+            initialScores[team.id]?.[criteria.name] ?? 0;
+        });
       });
-    });
-    setScores(defaultScores);
-    setIsLoading(false);
-  }, [initialScores]);
+      setScores(defaultScores);
+      setIsLoading(false);
+    }
+  }, [initialScores, teams, evaluationCriteria]);
 
   // Memoize expensive calculations
   const memoizedTotals = useMemo(() => {
@@ -48,7 +65,7 @@ const MarksheetTable = memo(function MarksheetTable({ onScoreChange, initialScor
       }
     });
     return totals;
-  }, [scores]);
+  }, [scores, teams, evaluationCriteria]);
 
   // Calculate total for a team (now uses memoized values)
   const calculateTotal = useCallback((teamId) => {
@@ -77,7 +94,7 @@ const MarksheetTable = memo(function MarksheetTable({ onScoreChange, initialScor
       
       return updatedScores;
     });
-  }, [onScoreChange]);
+  }, [onScoreChange, evaluationCriteria]);
 
   // Mobile Card Component for individual team (memoized)
   const TeamCard = memo(({ team, index }) => (

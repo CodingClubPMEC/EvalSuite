@@ -5,7 +5,6 @@ import Footer from '../components/Footer';
 import MarksheetTable from '../components/MarksheetTable';
 import { LoadingSpinner, PageLoading } from '../components/LoadingComponents';
 import { useDebounce } from '../hooks/useDebounce';
-import { juryProfiles } from '../data/juryData';
 import { saveJuryEvaluation, getJuryEvaluation } from '../utils/dataStorage';
 import { configManager } from '../config/hackathonConfig';
 
@@ -23,6 +22,9 @@ function MarkingPage() {
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+  // Get jury profiles dynamically
+  const juryProfiles = configManager.getActiveJuryMembers();
+  
   // Find jury information
   const jury = juryProfiles.find(j => j.id === parseInt(juryId));
 
@@ -41,20 +43,25 @@ function MarkingPage() {
     if (!autoSaveEnabled || Object.keys(scores).length === 0) return;
     
     try {
+      setIsSaving(true);
       await saveJuryEvaluation(parseInt(juryId), scores);
-      setLastSaved(new Date().toISOString());
+      const currentTime = new Date().toISOString();
+      setLastSaved(currentTime);
       setHasUnsavedChanges(false);
       setError(null); // Clear any previous errors
+      console.log('Auto-save successful at:', currentTime);
     } catch (error) {
       console.error('Auto-save failed:', error);
       setError('Auto-save failed. Please save manually.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Setup debounced auto-save - MUST be called before any conditional returns
   const { debouncedCallback: debouncedAutoSave, cancel: cancelAutoSave } = useDebounce(
     handleAutoSave,
-    3000 // 3 seconds delay for better user experience
+    2000 // 2 seconds delay for better responsiveness
   );
 
   // Load existing evaluation data
@@ -66,9 +73,13 @@ function MarkingPage() {
         
         if (jury) {
           const existingEvaluation = getJuryEvaluation(parseInt(juryId));
-          if (existingEvaluation) {
+          if (existingEvaluation && existingEvaluation.scores) {
             setScores(existingEvaluation.scores);
-            setLastSaved(existingEvaluation.submittedAt);
+            setLastSaved(existingEvaluation.submittedAt || existingEvaluation.lastUpdated);
+            setHasUnsavedChanges(false);
+            console.log('Loaded existing evaluation:', existingEvaluation);
+          } else {
+            console.log('No existing evaluation found, starting fresh');
           }
         }
       } catch (err) {
@@ -84,7 +95,7 @@ function MarkingPage() {
 
   // Auto-save when scores change (debounced)
   useEffect(() => {
-    if (Object.keys(scores).length > 0 && autoSaveEnabled) {
+    if (Object.keys(scores).length > 0 && autoSaveEnabled && hasUnsavedChanges) {
       debouncedAutoSave();
     }
     
@@ -92,7 +103,7 @@ function MarkingPage() {
     return () => {
       cancelAutoSave();
     };
-  }, [scores, autoSaveEnabled, debouncedAutoSave, cancelAutoSave]);
+  }, [scores, autoSaveEnabled, hasUnsavedChanges, debouncedAutoSave, cancelAutoSave]);
 
   // Save data when page becomes hidden (user switches tabs/minimizes)
   useEffect(() => {
@@ -173,6 +184,18 @@ function MarkingPage() {
   const handleScoreChange = (newScores) => {
     setScores(newScores);
     setHasUnsavedChanges(true);
+    
+    // Immediate background save (non-blocking)
+    if (autoSaveEnabled) {
+      setTimeout(async () => {
+        try {
+          await saveJuryEvaluation(parseInt(juryId), newScores);
+          console.log('Immediate save successful');
+        } catch (error) {
+          console.error('Immediate save failed:', error);
+        }
+      }, 100); // Small delay to avoid blocking UI
+    }
   };
 
   const handleSave = async () => {
@@ -273,7 +296,7 @@ function MarkingPage() {
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 py-2 font-bold tracking-wide text-sm disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed flex items-center space-x-2 rounded-lg shadow-lg hover:shadow-xl hover:shadow-glow transition-all duration-300 transform hover:scale-105"
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 py-2 font-bold tracking-wide text-sm disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed flex items-center space-x-2 rounded-lg shadow-lg hover:shadow-glow transition-all duration-300 transform hover:scale-105"
                 >
               {isSaving ? (
                 <>
