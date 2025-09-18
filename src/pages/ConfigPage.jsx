@@ -7,7 +7,7 @@ import {
   cleanupJuryEvaluationData, 
   cleanupTeamEvaluationData, 
   cleanupCriteriaEvaluationData 
-} from '../utils/dataStorage';
+} from '../services/apiService';
 
 function ConfigPage() {
   const [activeTab, setActiveTab] = useState('session');

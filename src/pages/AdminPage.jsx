@@ -6,10 +6,10 @@ import {
   getAllSubmissionStatus, 
   getConsolidatedMarksheet, 
   getLeaderboard,
-  resetAllEvaluations 
-} from '../utils/dataStorage';
+  getJuryEvaluation,
+  resetAllEvaluations
+} from '../services/apiService';
 import { exportToExcel } from '../utils/excelExport';
-import { getJuryEvaluation } from '../utils/dataStorage';
 import { configManager } from '../config/hackathonConfig';
 
 function AdminPage() {
@@ -31,10 +31,19 @@ function AdminPage() {
     loadData();
   }, []);
 
-  const loadData = () => {
-    setSubmissionStatus(getAllSubmissionStatus());
-    setConsolidatedData(getConsolidatedMarksheet());
-    setLeaderboard(getLeaderboard());
+  const loadData = async () => {
+    try {
+      const [statusData, consolidatedData, leaderboardData] = await Promise.all([
+        getAllSubmissionStatus(),
+        getConsolidatedMarksheet(),
+        getLeaderboard()
+      ]);
+      setSubmissionStatus(statusData);
+      setConsolidatedData(consolidatedData);
+      setLeaderboard(leaderboardData);
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    }
   };
 
   const handleDownloadConsolidated = async () => {
@@ -63,7 +72,7 @@ function AdminPage() {
 
   const handleDownloadIndividualJury = async (juryId, juryName) => {
     try {
-      const juryEvaluation = getJuryEvaluation(juryId);
+      const juryEvaluation = await getJuryEvaluation(juryId);
       if (juryEvaluation && juryEvaluation.isSubmitted) {
         await exportToExcel(juryEvaluation.scores, juryId);
         alert(`${juryName}'s marksheet downloaded successfully!`);
@@ -84,15 +93,15 @@ function AdminPage() {
 
     let downloadCount = 0;
     for (const jury of submissionStatus.completed) {
-      const juryEvaluation = getJuryEvaluation(jury.id);
-      if (juryEvaluation && juryEvaluation.isSubmitted) {
-        try {
+      try {
+        const juryEvaluation = await getJuryEvaluation(jury.id);
+        if (juryEvaluation && juryEvaluation.isSubmitted) {
           await new Promise(resolve => setTimeout(resolve, downloadCount * 500)); // Stagger downloads
           await exportToExcel(juryEvaluation.scores, jury.id);
           downloadCount++;
-        } catch (error) {
-          console.error(`Error downloading ${jury.name}'s marksheet:`, error);
         }
+      } catch (error) {
+        console.error(`Error downloading ${jury.name}'s marksheet:`, error);
       }
     }
 
