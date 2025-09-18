@@ -9,12 +9,12 @@ import {
   resetAllEvaluations 
 } from '../utils/dataStorage';
 import { exportToExcel } from '../utils/excelExport';
-import { evaluationCriteria } from '../data/juryData';
 import { getJuryEvaluation } from '../utils/dataStorage';
 import { configManager } from '../config/hackathonConfig';
 
 function AdminPage() {
   const sessionInfo = configManager.getSessionInfo();
+  const evaluationCriteria = configManager.getActiveEvaluationCriteria();
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [consolidatedData, setConsolidatedData] = useState(null);

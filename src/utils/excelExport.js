@@ -2,9 +2,14 @@
 const importExcelJS = () => import('exceljs');
 const importFileSaver = () => import('file-saver');
 
-import { teams, evaluationCriteria, juryProfiles } from '../data/juryData';
+import { configManager } from '../config/hackathonConfig';
 
 export const exportToExcel = async (data, identifier) => {
+  // Get dynamic data
+  const teams = configManager.getActiveTeams();
+  const evaluationCriteria = configManager.getActiveEvaluationCriteria();
+  const juryProfiles = configManager.getActiveJuryMembers();
+  
   // Dynamically import ExcelJS and FileSaver only when needed
   const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
     importExcelJS(),
@@ -16,11 +21,11 @@ export const exportToExcel = async (data, identifier) => {
 
   if (data.consolidated) {
     // Handle consolidated marksheet export
-    workbook = await createConsolidatedWorkbook(data, ExcelJS);
+    workbook = await createConsolidatedWorkbook(data, ExcelJS, evaluationCriteria);
     filename = `SIH_Consolidated_Marksheet_${timestamp}.xlsx`;
   } else {
     // Handle individual jury export (legacy support)
-    workbook = await createIndividualWorkbook(data, identifier, ExcelJS);
+    workbook = await createIndividualWorkbook(data, identifier, ExcelJS, teams, evaluationCriteria);
     const jury = juryProfiles.find(j => j.id === parseInt(identifier));
     const juryName = jury ? jury.name : `Jury_${identifier}`;
     filename = `SIH_Marksheet_${juryName.replace(/\s+/g, '_')}_${timestamp}.xlsx`;
@@ -35,7 +40,7 @@ export const exportToExcel = async (data, identifier) => {
 };
 
 // Create consolidated marksheet workbook
-const createConsolidatedWorkbook = async (data, ExcelJS) => {
+const createConsolidatedWorkbook = async (data, ExcelJS, evaluationCriteria) => {
   const workbook = new ExcelJS.Workbook();
 
   // Summary Sheet
@@ -130,10 +135,7 @@ const createConsolidatedWorkbook = async (data, ExcelJS) => {
 };
 
 // Create individual jury workbook (legacy support)
-const createIndividualWorkbook = async (scores, juryId, ExcelJS) => {
-  const jury = juryProfiles.find(j => j.id === parseInt(juryId));
-  const juryName = jury ? jury.name : `Jury ${juryId}`;
-
+const createIndividualWorkbook = async (scores, juryId, ExcelJS, teams, evaluationCriteria) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Marksheet');
   

@@ -2,26 +2,28 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import MarksheetTable from '../MarksheetTable'
 
-// Mock the data
-vi.mock('../../data/juryData', () => ({
-  teams: [
-    {
-      id: 1,
-      name: "Team Alpha",
-      members: ["John Doe", "Jane Smith"],
-      projectTitle: "Test Project"
-    },
-    {
-      id: 2,
-      name: "Team Beta", 
-      members: ["Bob Wilson"],
-      projectTitle: "Another Project"
-    }
-  ],
-  evaluationCriteria: [
-    { id: 1, name: "Innovation", maxMarks: 25 },
-    { id: 2, name: "Feasibility", maxMarks: 20 }
-  ]
+// Mock the configManager
+vi.mock('../../config/hackathonConfig', () => ({
+  configManager: {
+    getActiveTeams: () => [
+      {
+        id: 1,
+        name: "Team Alpha",
+        members: ["John Doe", "Jane Smith"],
+        projectTitle: "Test Project"
+      },
+      {
+        id: 2,
+        name: "Team Beta", 
+        members: ["Bob Wilson"],
+        projectTitle: "Another Project"
+      }
+    ],
+    getActiveEvaluationCriteria: () => [
+      { id: 1, name: "Innovation", maxMarks: 25 },
+      { id: 2, name: "Feasibility", maxMarks: 20 }
+    ]
+  }
 }))
 
 describe('MarksheetTable Component', () => {

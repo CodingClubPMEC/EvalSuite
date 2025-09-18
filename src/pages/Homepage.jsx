@@ -4,10 +4,10 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import JuryCard from '../components/JuryCard';
 import { configManager } from '../config/hackathonConfig';
-import { juryProfiles } from '../data/juryData';
 
 function Homepage() {
   const sessionInfo = configManager.getSessionInfo();
+  const juryProfiles = configManager.getActiveJuryMembers();
   
   // Update document title dynamically
   useEffect(() => {
