@@ -2,7 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config({ path: '../.env' });
+require('dotenv').config({ path: './.env' });
 const { httpLogger, logger } = require('./utils/logger');
 
 
@@ -18,7 +18,9 @@ const PORT = process.env.PORT || 5000;
 app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../dist')));
+// Serve built client (Client/dist) when available
+const clientDistPath = path.join(__dirname, '../Client/dist');
+app.use(express.static(clientDistPath));
 
 // Database connection
 const configuredDbName = process.env.MONGODB_DB || process.env.MONGODB_DBNAME;
@@ -78,8 +80,18 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Serve static files from dist (when built)
-app.use(express.static(path.join(__dirname, '../dist')));
+// Serve static files from Client/dist (when built)
+app.use(express.static(clientDistPath));
+
+// SPA fallback for client-side routing
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  try {
+    return res.sendFile(path.join(clientDistPath, 'index.html'));
+  } catch (e) {
+    return next();
+  }
+});
 
 // Basic route for testing
 app.get('/', (req, res) => {

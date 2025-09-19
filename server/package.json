@@ -9,11 +9,11 @@
     "init": "node scripts/initializeDatabase.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "morgan": "^1.10.1",
-    "json2csv": "^6.1.0"
+    "express": "^4.18.2",
+    "json2csv": "^6.0.0-alpha.2",
+    "mongoose": "^8.0.3",
+    "morgan": "^1.10.1"
   }
 }
