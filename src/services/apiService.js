@@ -8,7 +8,10 @@ class ApiService {
 
   // Generic API request method
   async request(endpoint, options = {}) {
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const url = `${this.baseURL}${endpoint}`;
+    const startTime = Date.now();
+    
     const config = {
       headers: {
         'Content-Type': 'application/json',
@@ -22,17 +25,58 @@ class ApiService {
     }
 
     try {
+      console.log(`[${requestId}] [REQUEST] ${config.method || 'GET'} ${url}`);
+      console.log(`[${requestId}] [CONFIG] Headers:`, config.headers);
+      
+      if (config.body) {
+        console.log(`[${requestId}] [BODY] Request body size: ${config.body.length} characters`);
+      }
+
       const response = await fetch(url, config);
+      const duration = Date.now() - startTime;
+      
+      console.log(`[${requestId}] [RESPONSE] Status: ${response.status} ${response.statusText} (${duration}ms)`);
+      console.log(`[${requestId}] [RESPONSE] Headers:`, Object.fromEntries(response.headers.entries()));
+
       const data = await response.json();
+      
+      console.log(`[${requestId}] [DATA] Response data received:`, {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        success: data?.success,
+        message: data?.message || data?.error
+      });
 
       if (!response.ok) {
+        console.error(`[${requestId}] [ERROR] HTTP error ${response.status}:`, data);
         throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
       }
 
+      console.log(`[${requestId}] [SUCCESS] Request completed successfully in ${duration}ms`);
       return data;
+      
     } catch (error) {
-      console.error(`API request failed: ${endpoint}`, error);
-      throw error;
+      const duration = Date.now() - startTime;
+      
+      console.error(`[${requestId}] [ERROR] API request failed after ${duration}ms:`, {
+        endpoint,
+        method: config.method || 'GET',
+        url,
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        errorStack: error.stack
+      });
+      
+      // Enhanced error context
+      const enhancedError = new Error(`API request failed: ${error.message}`);
+      enhancedError.originalError = error;
+      enhancedError.requestId = requestId;
+      enhancedError.endpoint = endpoint;
+      enhancedError.url = url;
+      enhancedError.method = config.method || 'GET';
+      enhancedError.duration = duration;
+      
+      throw enhancedError;
     }
   }
 
@@ -143,16 +187,119 @@ class ApiService {
 
   // Save jury evaluation (replaces saveJuryEvaluation)
   async saveJuryEvaluation(juryId, scores, autoSave = false) {
+    const startTime = Date.now();
+    const operationId = `save_eval_${juryId}_${Date.now()}`;
+    
     try {
+      console.log(`[${operationId}] [START] Saving jury evaluation for jury ${juryId}${autoSave ? ' (auto-save)' : ''}`);
+      console.log(`[${operationId}] [DATA] Scores data:`, JSON.stringify(scores, null, 2));
+      
+      // Validate input parameters
+      if (!juryId || typeof juryId !== 'string' && typeof juryId !== 'number') {
+        throw new Error('Invalid juryId provided');
+      }
+      
+      if (!scores || typeof scores !== 'object') {
+        throw new Error('Invalid scores data provided');
+      }
+      
+      // Validate scores structure
+      const validCriteria = ['Innovation', 'Feasibility', 'Presentation', 'Impact', 'Technical Quality'];
+      const scoresEntries = Object.entries(scores);
+      
+      if (scoresEntries.length === 0) {
+        console.warn(`[${operationId}] [WARNING] No scores provided for jury ${juryId}`);
+      }
+      
+      // Log score validation
+      scoresEntries.forEach(([teamId, teamScores]) => {
+        if (teamScores && typeof teamScores === 'object') {
+          const validScores = Object.keys(teamScores).filter(key => validCriteria.includes(key));
+          const invalidScores = Object.keys(teamScores).filter(key => !validCriteria.includes(key));
+          
+          if (invalidScores.length > 0) {
+            console.warn(`[${operationId}] [WARNING] Invalid criteria for team ${teamId}:`, invalidScores);
+          }
+          
+          console.log(`[${operationId}] [TEAM] Team ${teamId} - Valid criteria: ${validScores.length}, Invalid: ${invalidScores.length}`);
+        }
+      });
+      
+      console.log(`[${operationId}] [REQUEST] Making API call to /evaluations/jury/${juryId}`);
+      
       const response = await this.post(`/evaluations/jury/${juryId}`, {
         scores,
         autoSave
       });
       
+      const duration = Date.now() - startTime;
+      
+      // Enhanced response validation
+      if (!response) {
+        throw new Error('No response received from server');
+      }
+      
+      if (typeof response.success !== 'boolean') {
+        console.warn(`[${operationId}] [WARNING] Unexpected response format - success field missing or invalid`);
+        console.log(`[${operationId}] [RESPONSE] Full response:`, JSON.stringify(response, null, 2));
+      }
+      
+      if (response.success) {
+        console.log(`[${operationId}] [SUCCESS] Jury evaluation saved successfully in ${duration}ms`);
+        console.log(`[${operationId}] [RESPONSE] Message: ${response.message || 'No message'}`);
+        
+        if (response.data) {
+          console.log(`[${operationId}] [DATA] Response data:`, JSON.stringify(response.data, null, 2));
+        }
+      } else {
+        console.error(`[${operationId}] [ERROR] Server returned success: false`);
+        console.error(`[${operationId}] [ERROR] Error message: ${response.error || response.message || 'Unknown error'}`);
+        throw new Error(response.error || response.message || 'Server returned unsuccessful response');
+      }
+      
       return response.success;
+      
     } catch (error) {
-      console.error('Failed to save jury evaluation:', error);
-      throw error;
+      const duration = Date.now() - startTime;
+      
+      console.error(`[${operationId}] [ERROR] Failed to save jury evaluation after ${duration}ms`);
+      console.error(`[${operationId}] [ERROR] Error type: ${error.constructor.name}`);
+      console.error(`[${operationId}] [ERROR] Error message: ${error.message}`);
+      
+      if (error.stack) {
+        console.error(`[${operationId}] [ERROR] Stack trace:`, error.stack);
+      }
+      
+      // Enhanced error handling with specific error types
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        console.error(`[${operationId}] [ERROR] Network error - server may be unreachable`);
+        throw new Error(`Network error: Unable to connect to server. Please check your connection.`);
+      }
+      
+      if (error.message.includes('404')) {
+        console.error(`[${operationId}] [ERROR] Jury not found (404)`);
+        throw new Error(`Jury with ID ${juryId} not found. Please verify the jury ID.`);
+      }
+      
+      if (error.message.includes('400')) {
+        console.error(`[${operationId}] [ERROR] Bad request (400) - invalid data format`);
+        throw new Error(`Invalid data format. Please check your scores data.`);
+      }
+      
+      if (error.message.includes('500')) {
+        console.error(`[${operationId}] [ERROR] Server error (500)`);
+        throw new Error(`Server error occurred. Please try again later.`);
+      }
+      
+      // Re-throw with enhanced context
+      const enhancedError = new Error(`Failed to save jury evaluation: ${error.message}`);
+      enhancedError.originalError = error;
+      enhancedError.operationId = operationId;
+      enhancedError.juryId = juryId;
+      enhancedError.autoSave = autoSave;
+      enhancedError.duration = duration;
+      
+      throw enhancedError;
     }
   }
 
@@ -251,11 +398,27 @@ class ApiService {
 
   // Auto-save functionality
   async autoSave(juryId, scores) {
+    const operationId = `autosave_${juryId}_${Date.now()}`;
+    
     try {
-      return await this.saveJuryEvaluation(juryId, scores, true);
+      console.log(`[${operationId}] [AUTOSAVE] Starting auto-save for jury ${juryId}`);
+      console.log(`[${operationId}] [AUTOSAVE] Scores count: ${Object.keys(scores || {}).length}`);
+      
+      const result = await this.saveJuryEvaluation(juryId, scores, true);
+      
+      console.log(`[${operationId}] [AUTOSAVE] Auto-save completed successfully`);
+      return result;
+      
     } catch (error) {
-      console.error('Auto-save failed:', error);
-      // Don't throw error for auto-save failures
+      console.error(`[${operationId}] [AUTOSAVE] Auto-save failed for jury ${juryId}:`, error.message);
+      console.error(`[${operationId}] [AUTOSAVE] Error details:`, {
+        errorType: error.constructor.name,
+        errorMessage: error.message,
+        juryId,
+        scoresCount: Object.keys(scores || {}).length
+      });
+      
+      // Don't throw error for auto-save failures to prevent disrupting user experience
       return false;
     }
   }

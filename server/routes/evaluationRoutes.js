@@ -3,10 +3,21 @@ const Event = require('../models/Event');
 const router = express.Router();
 
 // POST /api/evaluations/jury/:juryId - Save jury evaluation scores
+const { logger } = require('../utils/logger');
+
 router.post('/jury/:juryId', async (req, res) => {
   try {
     const { juryId } = req.params;
     const { scores, autoSave = false } = req.body;
+    
+    logger.info(`[START] Processing evaluation submission for jury ${juryId}${autoSave ? ' (auto-save)' : ''}`);
+    logger.db('evaluation_submission', { 
+      juryId, 
+      autoSave, 
+      scoresCount: Object.keys(scores).length,
+      timestamp: new Date().toISOString(),
+      scores: JSON.stringify(scores)
+    });
 
     if (!scores || typeof scores !== 'object') {
       return res.status(400).json({
@@ -33,10 +44,18 @@ router.post('/jury/:juryId', async (req, res) => {
       });
     }
 
+    logger.info(`[JURY] Found jury ${jury.name} (ID: ${jury.juryId})`);
+    
     // Update scores for each team
     Object.keys(scores).forEach(teamId => {
+      logger.info(`[TEAM] Processing scores for team ${teamId}`);
       const teamScores = scores[teamId];
       const team = jury.teamEvaluations.find(t => t.teamId === parseInt(teamId));
+      
+      if (!team) {
+        logger.error(`[TEAM] Team ${teamId} not found in jury's evaluation list`);
+        return;
+      }
       
       if (team && teamScores) {
         // Update individual marks
@@ -97,10 +116,28 @@ router.post('/jury/:juryId', async (req, res) => {
     
     console.log('💾 [DEBUG] Marked juries as modified, saving to database...');
 
+    // Log pre-save state
+    logger.db('pre_save_state', {
+      eventId: activeEvent._id,
+      juryId,
+      autoSave,
+      modifiedPaths: activeEvent.modifiedPaths()
+    });
+
     // Save the updated event
-    await activeEvent.save();
-    
-    console.log('✅ [DEBUG] Successfully saved to database');
+    try {
+      const savedEvent = await activeEvent.save();
+      logger.info(`Successfully saved evaluation for jury ${juryId}`);
+      logger.db('save_success', {
+        eventId: savedEvent._id,
+        juryId,
+        autoSave,
+        savedAt: new Date()
+      });
+    } catch (saveError) {
+      logger.error('Failed to save evaluation', saveError);
+      throw saveError;
+    }
 
     res.json({
       success: true,

@@ -116,11 +116,16 @@ const hackathonConfig = {
 
 async function initializeDatabase() {
   try {
+    const { logger } = require('../utils/logger');
+    logger.info('[INIT] Starting database initialization...');
+    const configuredDbName = process.env.MONGODB_DB || process.env.MONGODB_DBNAME;
+    logger.info(`[INIT] MongoDB URI: ${(process.env.MONGODB_URI || '').replace(/\/\/[^:]+:[^@]+@/, '//***:***@')}`);
+    
     // Connect to MongoDB
-    console.log('🔌 Connecting to MongoDB...');
+    logger.info('[INIT] 🔌 Connecting to MongoDB...');
     console.log('📍 MongoDB URI:', process.env.MONGODB_URI || 'UNDEFINED');
     console.log('🌍 NODE_ENV:', process.env.NODE_ENV || 'UNDEFINED');
-    await mongoose.connect(process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI, configuredDbName ? { dbName: configuredDbName } : undefined);
     console.log('✅ Connected to MongoDB successfully');
     console.log(`📦 Database: ${mongoose.connection.name}`);
     
