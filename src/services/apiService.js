@@ -1,4 +1,5 @@
 // API Service - Replaces localStorage functionality with MongoDB backend calls
+import hackathonConfig from '../config/hackathonConfig';
 const API_BASE_URL = process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api';
 
 class ApiService {
@@ -227,7 +228,7 @@ class ApiService {
       
       console.log(`[${operationId}] [REQUEST] Making API call to /evaluations/jury/${juryId}`);
       
-      const response = await this.post(`/evaluations/jury/${juryId}`, {
+      let response = await this.post(`/evaluations/jury/${juryId}`, {
         scores,
         autoSave
       });
@@ -270,6 +271,25 @@ class ApiService {
         console.error(`[${operationId}] [ERROR] Stack trace:`, error.stack);
       }
       
+      // If there is no active event (common when switching to Atlas), attempt to initialize and retry once
+      const noActiveEvent = /No active event found/i.test(error.message || '');
+      if (noActiveEvent) {
+        try {
+          console.warn(`[${operationId}] [RECOVERY] No active event found. Initializing event from config and retrying once...`);
+          await this.initializeEventFromConfig(hackathonConfig);
+          console.log(`[${operationId}] [RECOVERY] Initialization complete. Retrying save...`);
+
+          const retryResponse = await this.post(`/evaluations/jury/${juryId}`, { scores, autoSave });
+          if (retryResponse && retryResponse.success) {
+            console.log(`[${operationId}] [RECOVERY] Retry save successful.`);
+            return true;
+          }
+          console.error(`[${operationId}] [RECOVERY] Retry save failed:`, retryResponse);
+        } catch (initErr) {
+          console.error(`[${operationId}] [RECOVERY] Initialization or retry failed: ${initErr.message}`);
+        }
+      }
+
       // Enhanced error handling with specific error types
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         console.error(`[${operationId}] [ERROR] Network error - server may be unreachable`);
