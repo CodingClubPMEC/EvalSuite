@@ -7,7 +7,7 @@ import {
   cleanupJuryEvaluationData, 
   cleanupTeamEvaluationData, 
   cleanupCriteriaEvaluationData 
-} from '../utils/dataStorage';
+} from '../services/apiService';
 
 function ConfigPage() {
   const [activeTab, setActiveTab] = useState('session');
@@ -17,6 +17,12 @@ function ConfigPage() {
   const [evaluationCriteria, setEvaluationCriteria] = useState(hackathonConfig.evaluationCriteria);
   const [isEditing, setIsEditing] = useState(null);
   const [showAddForm, setShowAddForm] = useState(null);
+
+  // Update document title dynamically
+  useEffect(() => {
+    const systemName = sessionConfig.systemName || 'EvalSuite';
+    document.title = `${systemName} - System Configuration`;
+  }, [sessionConfig.systemName]);
 
   // Form states for adding new items
   const [newJuryForm, setNewJuryForm] = useState({
@@ -309,7 +315,7 @@ function ConfigPage() {
           <div className="bg-white rounded-t-xl shadow-lg border-b border-gray-200 mb-0">
             <div className="flex space-x-0 overflow-x-auto">
               <TabButton id="session" label="🏛️ SESSION INFO" isActive={activeTab === 'session'} onClick={setActiveTab} />
-              <TabButton id="jury" label="👥 JURY MEMBERS" isActive={activeTab === 'jury'} onClick={setActiveTab} />
+              <TabButton id="jury" label="👥 EXPERT EVALUATORS" isActive={activeTab === 'jury'} onClick={setActiveTab} />
               <TabButton id="teams" label="🚀 TEAMS" isActive={activeTab === 'teams'} onClick={setActiveTab} />
               <TabButton id="criteria" label="📊 EVALUATION CRITERIA" isActive={activeTab === 'criteria'} onClick={setActiveTab} />
             </div>
@@ -347,7 +353,7 @@ function ConfigPage() {
                     />
                   </div>
 
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-bold text-slate-700 mb-2">Subtitle</label>
                     <input
                       type="text"
@@ -358,34 +364,93 @@ function ConfigPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Organization</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Event Type</label>
                     <input
                       type="text"
-                      value={sessionConfig.organization}
-                      onChange={(e) => handleSessionUpdate('organization', e.target.value)}
+                      value={sessionConfig.eventType || ''}
+                      onChange={(e) => handleSessionUpdate('eventType', e.target.value)}
                       className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
+                      placeholder="e.g., Competitive Hackathon, Innovation Challenge"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Organization Short Name</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Evaluation Phase</label>
                     <input
                       type="text"
-                      value={sessionConfig.organizationShort}
-                      onChange={(e) => handleSessionUpdate('organizationShort', e.target.value)}
+                      value={sessionConfig.evaluationPhase || ''}
+                      onChange={(e) => handleSessionUpdate('evaluationPhase', e.target.value)}
                       className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
+                      placeholder="e.g., Assessment Phase, Final Round"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Logo Path</label>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Participant Label</label>
                     <input
                       type="text"
-                      value={sessionConfig.logoPath}
-                      onChange={(e) => handleSessionUpdate('logoPath', e.target.value)}
+                      value={sessionConfig.participantLabel || ''}
+                      onChange={(e) => handleSessionUpdate('participantLabel', e.target.value)}
                       className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
-                      placeholder="/path/to/logo.png"
+                      placeholder="e.g., Teams, Participants, Groups"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Jury Label</label>
+                    <input
+                      type="text"
+                      value={sessionConfig.juryLabel || ''}
+                      onChange={(e) => handleSessionUpdate('juryLabel', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
+                      placeholder="e.g., Expert Evaluation Panel, Assessment Committee, Review Board"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">System Name</label>
+                    <input
+                      type="text"
+                      value={sessionConfig.systemName || ''}
+                      onChange={(e) => handleSessionUpdate('systemName', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
+                      placeholder="e.g., EvalSuite, AssessmentPro, EvaluationHub"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-bold text-slate-700 mb-2">System Purpose</label>
+                    <input
+                      type="text"
+                      value={sessionConfig.systemPurpose || ''}
+                      onChange={(e) => handleSessionUpdate('systemPurpose', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 font-medium"
+                      placeholder="e.g., Professional evaluation and scoring, Comprehensive assessment system"
+                    />
+                  </div>
+                </div>
+
+                {/* Fixed Organization Info */}
+                <div className="mt-8 p-6 bg-gradient-to-r from-orange-50 to-slate-50 border border-orange-200 rounded-xl">
+                  <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
+                    🏛️ Organization Information (Fixed)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Organization Name</label>
+                      <div className="px-4 py-3 bg-gray-100 border-2 border-gray-200 rounded-lg font-medium text-slate-600">
+                        Parala Maharaja Engineering College
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">This value is permanent and cannot be changed</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Organization Short Name</label>
+                      <div className="px-4 py-3 bg-gray-100 border-2 border-gray-200 rounded-lg font-medium text-slate-600">
+                        PMEC
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">This value is permanent and cannot be changed</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -396,21 +461,21 @@ function ConfigPage() {
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-3xl font-bold text-slate-800 mb-2">👥 JURY MEMBERS</h2>
-                    <p className="text-slate-600">Manage evaluation panel for hackathon {sessionConfig.year}</p>
+                    <h2 className="text-3xl font-bold text-slate-800 mb-2">👥 EXPERT EVALUATORS</h2>
+                    <p className="text-slate-600">Manage evaluation panel for {sessionConfig.eventType?.toLowerCase() || 'hackathon'} {sessionConfig.year}</p>
                   </div>
                   <button
                     onClick={() => setShowAddForm(showAddForm === 'jury' ? null : 'jury')}
                     className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 font-bold tracking-wide text-sm rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                   >
-                    ➕ ADD JURY MEMBER
+                    ➕ ADD EVALUATOR
                   </button>
                 </div>
 
                 {/* Add Jury Form */}
                 {showAddForm === 'jury' && (
                   <div className="bg-green-50 rounded-xl p-6 border border-green-200 mb-6">
-                    <h3 className="text-lg font-bold text-green-800 mb-4">Add New Jury Member</h3>
+                    <h3 className="text-lg font-bold text-green-800 mb-4">Add New Expert Evaluator</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <input
                         type="text"
@@ -460,7 +525,7 @@ function ConfigPage() {
                         onClick={handleAddJury}
                         className="bg-green-600 text-white px-6 py-2 font-bold rounded-lg hover:bg-green-700 transition-colors"
                       >
-                        ✅ ADD JURY
+                        ✅ ADD EVALUATOR
                       </button>
                       <button
                         onClick={() => setShowAddForm(null)}
@@ -540,7 +605,7 @@ function ConfigPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-3xl font-bold text-slate-800 mb-2">🚀 PARTICIPATING TEAMS</h2>
-                    <p className="text-slate-600">Manage teams for hackathon {sessionConfig.year}</p>
+                    <p className="text-slate-600">Manage {sessionConfig.participantLabel?.toLowerCase() || 'teams'} for {sessionConfig.eventType?.toLowerCase() || 'hackathon'} {sessionConfig.year}</p>
                   </div>
                   <button
                     onClick={() => setShowAddForm(showAddForm === 'team' ? null : 'team')}
@@ -662,7 +727,7 @@ function ConfigPage() {
                 <div className="flex justify-between items-center">
                   <div>
                     <h2 className="text-3xl font-bold text-slate-800 mb-2">📊 EVALUATION CRITERIA</h2>
-                    <p className="text-slate-600">Define scoring parameters for hackathon {sessionConfig.year}</p>
+                    <p className="text-slate-600">Define scoring parameters for {sessionConfig.eventType?.toLowerCase() || 'hackathon'} {sessionConfig.year}</p>
                   </div>
                   <button
                     onClick={() => setShowAddForm(showAddForm === 'criteria' ? null : 'criteria')}

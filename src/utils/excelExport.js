@@ -96,7 +96,6 @@ export const exportToExcel = async (data, identifier) => {
     }
 
     console.log('💾 Generated filename:', filename);
-
     // Save the file
     console.log('💽 Writing workbook to buffer...');
     const buffer = await workbook.xlsx.writeBuffer();
@@ -169,7 +168,6 @@ const createConsolidatedWorkbook = async (data, ExcelJS) => {
   
   // Summary Sheet
   const summarySheet = workbook.addWorksheet('Summary');
-  
   summarySheet.addRow(['INTERNAL HACKATHON - CONSOLIDATED MARKSHEET']);
   summarySheet.addRow(['Parala Maharaja Engineering College']);
   summarySheet.addRow(['Generated:', new Date(data.generatedAt).toLocaleString()]);
@@ -186,12 +184,10 @@ const createConsolidatedWorkbook = async (data, ExcelJS) => {
       team.submittedJuries
     ]);
   });
-
   // Style summary sheet
   summarySheet.getRow(1).font = { bold: true, size: 14 };
   summarySheet.getRow(5).font = { bold: true };
   summarySheet.getRow(6).font = { bold: true };
-  
   // Set column widths
   summarySheet.columns = [
     { width: 8 }, { width: 15 }, { width: 35 }, { width: 15 }, { width: 15 }
@@ -221,6 +217,7 @@ const createConsolidatedWorkbook = async (data, ExcelJS) => {
   
   detailedSheet.addRow(detailedHeaders);
   
+  // Add team data
   data.teams.forEach((team, index) => {
     const row = [
       index + 1,
@@ -290,6 +287,7 @@ const createIndividualWorkbook = async (scores, juryId, ExcelJS) => {
   ];
   worksheet.addRow(headerRow);
 
+  // Add team data
   teams.forEach(team => {
     const teamScores = scores[team.id] || {};
     const total = evaluationCriteria.reduce((sum, criteria) => {
@@ -297,6 +295,7 @@ const createIndividualWorkbook = async (scores, juryId, ExcelJS) => {
     }, 0);
 
     const row = [
+
       team.name,
       team.projectTitle,
       team.members.join(', '),
@@ -306,9 +305,11 @@ const createIndividualWorkbook = async (scores, juryId, ExcelJS) => {
     worksheet.addRow(row);
   });
 
+
   // Style the worksheet
   worksheet.getRow(1).font = { bold: true };
   
+
   // Set column widths
   worksheet.columns = [
     { width: 15 }, { width: 30 }, { width: 40 },
