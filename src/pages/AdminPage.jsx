@@ -47,41 +47,44 @@ function AdminPage() {
   };
 
   const handleDownloadConsolidated = async () => {
-    try {
-      if (!consolidatedData) {
-        alert('No consolidated data available to download.');
-        return;
+    if (consolidatedData) {
+      try {
+        // Create export data for consolidated marksheet
+        const exportData = {
+          consolidated: true,
+          teams: consolidatedData.teams,
+          juries: consolidatedData.juries,
+          criteria: consolidatedData.criteria,
+          generatedAt: consolidatedData.generatedAt
+        };
+        
+        console.log('🚀 Starting consolidated download...');
+        await exportToExcel(exportData, 'admin-consolidated');
+        console.log('✅ Consolidated download completed');
+        // Don't show alert immediately - let the export function handle user feedback
+      } catch (error) {
+        console.error('❌ Download failed:', error);
+        alert('Download failed: ' + error.message);
       }
-      
-      // Create export data for consolidated marksheet
-      const exportData = {
-        consolidated: true,
-        teams: consolidatedData.teams,
-        juries: consolidatedData.juries,
-        criteria: consolidatedData.criteria,
-        generatedAt: consolidatedData.generatedAt
-      };
-      
-      await exportToExcel(exportData, 'admin-consolidated');
-      alert('Consolidated marksheet downloaded successfully!');
-    } catch (error) {
-      console.error('Error downloading consolidated marksheet:', error);
-      alert('Error downloading consolidated marksheet. Please try again.');
+    } else {
+      alert('No data available for download.');
     }
   };
 
   const handleDownloadIndividualJury = async (juryId, juryName) => {
     try {
-      const juryEvaluation = await getJuryEvaluation(juryId);
+      const juryEvaluation = getJuryEvaluation(juryId);
       if (juryEvaluation && juryEvaluation.isSubmitted) {
+        console.log(`🚀 Starting download for ${juryName}...`);
         await exportToExcel(juryEvaluation.scores, juryId);
-        alert(`${juryName}'s marksheet downloaded successfully!`);
+        console.log(`✅ Download completed for ${juryName}`);
+        // Don't show alert immediately - let the export function handle user feedback
       } else {
         alert(`${juryName} hasn't saved any evaluation data yet.`);
       }
     } catch (error) {
-      console.error('Error downloading individual marksheet:', error);
-      alert(`Error downloading ${juryName}'s marksheet. Please try again.`);
+      console.error(`❌ Download failed for ${juryName}:`, error);
+      alert(`Download failed for ${juryName}: ` + error.message);
     }
   };
 
@@ -90,22 +93,41 @@ function AdminPage() {
       alert('No completed evaluations to download.');
       return;
     }
-
-    let downloadCount = 0;
-    for (const jury of submissionStatus.completed) {
-      try {
-        const juryEvaluation = await getJuryEvaluation(jury.id);
+    try {
+      let downloadCount = 0;
+      const totalDownloads = submissionStatus.completed.length;
+      
+      console.log(`🚀 Starting bulk download of ${totalDownloads} marksheets...`);
+      
+      for (let i = 0; i < submissionStatus.completed.length; i++) {
+        const jury = submissionStatus.completed[i];
+        const juryEvaluation = getJuryEvaluation(jury.id);
+        
         if (juryEvaluation && juryEvaluation.isSubmitted) {
-          await new Promise(resolve => setTimeout(resolve, downloadCount * 500)); // Stagger downloads
-          await exportToExcel(juryEvaluation.scores, jury.id);
-          downloadCount++;
+          try {
+            // Stagger downloads by 1 second to prevent browser blocking
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            console.log(`📄 Downloading marksheet ${i + 1}/${totalDownloads}: ${jury.name}`);
+            await exportToExcel(juryEvaluation.scores, jury.id);
+            downloadCount++;
+          } catch (error) {
+            console.error(`❌ Failed to download ${jury.name}:`, error);
+          }
         }
-      } catch (error) {
-        console.error(`Error downloading ${jury.name}'s marksheet:`, error);
       }
-    }
 
-    alert(`Downloaded ${downloadCount} individual marksheets.`);
+      // Show final summary
+      setTimeout(() => {
+        alert(`Bulk download completed!\n\n${downloadCount}/${totalDownloads} marksheets downloaded successfully.`);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Bulk download failed:', error);
+      alert('Bulk download failed: ' + error.message);
+    }
   };
 
   const handleResetData = () => {
