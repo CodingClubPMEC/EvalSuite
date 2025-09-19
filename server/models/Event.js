@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { logger } = require('../utils/logger');
 
 // Event Schema - Top level of hierarchy
 const eventSchema = new mongoose.Schema({
@@ -289,7 +290,23 @@ eventSchema.methods.generateLeaderboard = function() {
 
 // Static method to find active event
 eventSchema.statics.findActiveEvent = function() {
-  return this.findOne({ status: 'active' });
+  logger.info('Finding active event');
+  try {
+    const activeEvent = this.findOne({ status: 'active' });
+    if (activeEvent) {
+      logger.db('active_event_found', { 
+        eventId: activeEvent._id,
+        title: activeEvent.title,
+        year: activeEvent.year
+      });
+    } else {
+      logger.error('No active event found in database');
+    }
+    return activeEvent;
+  } catch (error) {
+    logger.error('Error finding active event', error);
+    throw error;
+  }
 };
 
 module.exports = mongoose.model('Event', eventSchema);
